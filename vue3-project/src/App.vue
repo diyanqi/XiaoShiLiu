@@ -9,7 +9,6 @@ import { useKeyboardShortcutsStore } from '@/stores/keyboardShortcuts'
 import { useAccountSecurityStore } from '@/stores/accountSecurity'
 import { useVerifiedStore } from '@/stores/verified'
 import AuthModal from '@/components/modals/AuthModal.vue'
-import ResetPasswordModal from '@/components/modals/ResetPasswordModal.vue'
 import AboutModal from '@/components/modals/AboutModal.vue'
 import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue'
 import KeyboardShortcutsModal from '@/components/modals/KeyboardShortcutsModal.vue'
@@ -26,24 +25,6 @@ const keyboardShortcutsStore = useKeyboardShortcutsStore()
 const accountSecurityStore = useAccountSecurityStore()
 const verifiedStore = useVerifiedStore()
 const { confirmState, handleConfirm, handleCancel } = useConfirm()
-
-// 找回密码模态框状态
-import { ref } from 'vue'
-const showResetPasswordModal = ref(false)
-
-const openResetPassword = () => {
-  authStore.closeAuthModal()
-  showResetPasswordModal.value = true
-}
-
-const closeResetPassword = () => {
-  showResetPasswordModal.value = false
-}
-
-const backToLoginFromReset = () => {
-  showResetPasswordModal.value = false
-  authStore.openLoginModal()
-}
 
 // 恢复保存的主题色
 const restoreThemeColor = () => {
@@ -112,9 +93,7 @@ onMounted(() => {
   <div class="app-container">
     <RouterView />
     <AuthModal v-if="authStore.showAuthModal" :initial-mode="authStore.initialMode" @close="authStore.closeAuthModal"
-      @success="authStore.closeAuthModal" @open-reset-password="openResetPassword" />
-    <ResetPasswordModal v-if="showResetPasswordModal" @close="closeResetPassword"
-      @back-to-login="backToLoginFromReset" />
+      @success="authStore.closeAuthModal" />
     <AboutModal v-if="aboutStore.showAboutModal" @close="aboutStore.closeAboutModal" />
     <ChangePasswordModal v-if="changePasswordStore.showChangePasswordModal" :userInfo="userStore.userInfo"
       @close="changePasswordStore.closeChangePasswordModal" />

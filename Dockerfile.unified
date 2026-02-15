@@ -1,0 +1,31 @@
+# 前端构建阶段
+FROM node:18-alpine AS frontend-builder
+WORKDIR /frontend
+COPY vue3-project/package*.json ./
+RUN npm install
+COPY vue3-project/ ./
+ARG VITE_USE_REAL_API=true
+ARG VITE_API_BASE_URL=/api
+ENV VITE_USE_REAL_API=${VITE_USE_REAL_API}
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+RUN npm run build
+
+# 后端依赖阶段
+FROM node:18-alpine AS backend-deps
+WORKDIR /backend
+COPY express-project/package*.json ./
+RUN npm install --omit=dev
+
+# 运行阶段
+FROM node:18-alpine AS runtime
+WORKDIR /app
+COPY express-project/ ./
+COPY --from=backend-deps /backend/node_modules ./node_modules
+COPY --from=frontend-builder /frontend/dist ./public
+ENV NODE_ENV=production
+ENV SERVE_FRONTEND=true
+ENV PORT=3001
+EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
+CMD ["npm", "start"]

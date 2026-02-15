@@ -114,6 +114,14 @@ export const useUserStore = defineStore('user', () => {
       } catch (error) {
         console.error('重置未读通知数量失败:', error)
       }
+
+      try {
+        const { useMessageStore } = await import('./message')
+        const messageStore = useMessageStore()
+        messageStore.resetUnreadCount()
+      } catch (error) {
+        console.error('重置私信未读数量失败:', error)
+      }
     }
   }
 

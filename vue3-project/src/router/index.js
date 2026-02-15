@@ -9,9 +9,13 @@ import FollowList from '@/views/user/FollowList.vue'
 import ChannelPage from '@/views/explore/ChannelPage.vue'
 import PostDetail from '@/views/PostDetail.vue'
 import SearchResult from '@/views/search/SearchResult.vue'
+import messages from '@/views/messages/index.vue'
+import tickets from '@/views/tickets/index.vue'
+import TicketDetail from '@/views/tickets/TicketDetail.vue'
 import PostManagementPage from '@/views/post-management/index.vue'
 import DraftBoxPage from '@/views/draft-box/index.vue'
 import NotFound from '@/views/NotFound.vue'
+import Callback from '@/views/user/Callback.vue'
 import { getValidChannelPaths } from '@/config/channels'
 
 // 后台管理系统组件
@@ -31,6 +35,7 @@ import NotificationManagement from '@/views/admin/NotificationManagement.vue'
 import SessionManagement from '@/views/admin/SessionManagement.vue'
 import AdminManagement from '@/views/admin/AdminManagement.vue'
 import AuditManagement from '@/views/admin/AuditManagement.vue'
+import TicketManagement from '@/views/admin/TicketManagement.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -84,6 +89,21 @@ const router = createRouter({
           component: notification,
         },
         {
+          path: 'messages',
+          name: 'messages',
+          component: messages,
+        },
+        {
+          path: 'tickets',
+          name: 'tickets',
+          component: tickets,
+        },
+        {
+          path: 'tickets/:id',
+          name: 'ticket_detail',
+          component: TicketDetail,
+        },
+        {
           path: 'user',
           name: 'user',
           component: user,
@@ -92,6 +112,11 @@ const router = createRouter({
           path: 'user/:userId',
           name: 'user_profile',
           component: userProfile,
+        },
+        {
+          path: 'callback',
+          name: 'casdoor_callback',
+          component: Callback
         },
         {
           path: 'follow/:type',
@@ -249,6 +274,11 @@ const router = createRouter({
           path: 'audit',
           name: 'admin_audit',
           component: AuditManagement
+        },
+        {
+          path: 'tickets',
+          name: 'admin_tickets',
+          component: TicketManagement
         }
       ]
     }

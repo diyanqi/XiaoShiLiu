@@ -6,23 +6,27 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouteUtils } from '@/composables/useRouteUtils'
 import { useUserStore } from '@/stores/user.js'
 import { useNotificationStore } from '@/stores/notification'
+import { useMessageStore } from '@/stores/message'
 import { useAuthStore } from '@/stores/auth'
 
 const { route, handleExploreClick } = useRouteUtils()
 const userStore = useUserStore()
 const notificationStore = useNotificationStore()
+const messageStore = useMessageStore()
 const authStore = useAuthStore()
 
 const defaultAvatar = new URL('@/assets/imgs/avatar.png', import.meta.url).href
 
 // 从store获取未读通知数量
 const unreadCount = computed(() => notificationStore.unreadCount)
+const unreadMessageCount = computed(() => messageStore.unreadCount)
 
 // 菜单项配置
 const menuItems = ref([
   { label: '发现', icon: 'home', path: '/explore' },
   { label: '发布', icon: 'publish', path: '/publish' },
   { label: '通知', icon: 'notification', path: '/notification' },
+  { label: '私信', icon: 'chat', path: '/messages' },
   { label: '我', icon: 'avatar', path: '/user' },
   { label: '更多', icon: 'menu', path: '' },
 ]);
@@ -35,10 +39,12 @@ const menuItems = ref([
 watch(() => userStore.isLoggedIn, (newValue) => {
   if (newValue) {
     notificationStore.fetchUnreadCount()
+    messageStore.fetchUnreadCount()
     console.log('登录状态已改变')
   } else {
     console.log('未登录')
     notificationStore.clearUnreadCount()
+    messageStore.clearUnreadCount()
   }
 }, { immediate: true })
 
@@ -50,11 +56,31 @@ watch(() => route.path, (newPath, oldPath) => {
       notificationStore.fetchUnreadCount()
     }, 500)
   }
+
+  if (oldPath === '/messages' && newPath !== '/messages' && userStore.isLoggedIn) {
+    setTimeout(() => {
+      messageStore.fetchUnreadCount()
+    }, 500)
+  }
 })
 
-// 登录按钮点击处理
-const handleLoginClick = () => {
-  authStore.openLoginModal()
+// 登录按钮点击处理 - 直接跳转到Casdoor登录
+const handleLoginClick = async () => {
+  try {
+    const response = await fetch('/api/auth/casdoor/login')
+    const result = await response.json()
+    if (result.code === 200 && result.data.signinUrl) {
+      window.location.href = result.data.signinUrl
+    } else {
+      console.error('获取登录地址失败:', result.message)
+      // 如果Casdoor不可用，回退到使用弹窗
+      authStore.openLoginModal()
+    }
+  } catch (error) {
+    console.error('Casdoor 登录失败:', error)
+    // 网络错误时回退到使用弹窗
+    authStore.openLoginModal()
+  }
 }
 
 function handleAvatarError(event) {
@@ -66,6 +92,7 @@ onMounted(() => {
   userStore.initUserInfo()
   if (userStore.isLoggedIn) {
     notificationStore.fetchUnreadCount()
+    messageStore.fetchUnreadCount()
   }
 })
 </script>
@@ -85,8 +112,8 @@ onMounted(() => {
         </div>
       </li>
 
-      <li v-for="item in menuItems.slice(1, 3)" :key="item.label"
-        :class="{ 'notification-item': item.icon === 'notification' }">
+      <li v-for="item in menuItems.slice(1, 4)" :key="item.label"
+        :class="{ 'badge-item': item.icon === 'notification' || item.icon === 'chat' }">
         <RouterLink :to="item.path" class="sidebar-link"
           :class="{ 'active-link': route.path === item.path }">
           <span v-if="item.icon" class="sidebar-icon">
@@ -97,18 +124,19 @@ onMounted(() => {
 
           <div v-if="item.icon === 'notification' && unreadCount > 0" class="count">{{ unreadCount > 99 ? '···' :
             unreadCount }}</div>
+          <div v-if="item.icon === 'chat' && unreadMessageCount > 0" class="count">{{ unreadMessageCount > 99 ? '···' : unreadMessageCount }}</div>
         </RouterLink>
       </li>
 
 
       <li v-if="userStore.isLoggedIn">
-        <RouterLink :to="menuItems[3].path" class="sidebar-link"
-          :class="{ 'active-link': route.path === menuItems[3].path }">
+        <RouterLink :to="menuItems[4].path" class="sidebar-link"
+          :class="{ 'active-link': route.path === menuItems[4].path }">
           <span class="sidebar-icon">
             <img :src="userStore.userInfo?.avatar || defaultAvatar" :alt="userStore.userInfo?.nickname || '用户头像'"
               class="avatar-icon" @error="handleAvatarError" />
           </span>
-          <span class="sidebar-label">{{ menuItems[3].label }}</span>
+          <span class="sidebar-label">{{ menuItems[4].label }}</span>
         </RouterLink>
       </li>
 
@@ -126,9 +154,9 @@ onMounted(() => {
           <li class="sidebar-footer-item">
             <div class="sidebar-link">
               <span class="sidebar-icon">
-                <SvgIcon :name="menuItems[4].icon" width="24px" height="24px" />
+                <SvgIcon :name="menuItems[5].icon" width="24px" height="24px" />
               </span>
-              <span class="sidebar-label">{{ menuItems[4].label }}</span>
+              <span class="sidebar-label">{{ menuItems[5].label }}</span>
             </div>
           </li>
         </template>
@@ -266,11 +294,11 @@ onMounted(() => {
 }
 
 /* 通知badge样式 */
-.notification-item {
+.badge-item {
   position: relative;
 }
 
-.notification-item .count {
+.badge-item .count {
   position: absolute;
   width: 20px;
   height: 20px;

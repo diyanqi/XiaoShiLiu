@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool, email: emailConfig } = require('../config/config');
+const { pool, email: emailConfig, auth: authConfig } = require('../config/config');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
 const { authenticateToken } = require('../middleware/auth');
 const { getIPLocation, getRealIP } = require('../utils/ipLocation');
@@ -9,11 +9,29 @@ const { sendEmailCode } = require('../utils/email');
 const svgCaptcha = require('svg-captcha');
 const path = require('path');
 const fs = require('fs');
+const { SDK } = require('casdoor-nodejs-sdk');
+const { casdoor: casdoorConfig } = require('../config/config');
+
+// 初始化 Casdoor SDK
+const casdoorSdk = new SDK(casdoorConfig);
 
 // 存储验证码的临时对象
 const captchaStore = new Map();
 // 存储邮箱验证码的临时对象
 const emailCodeStore = new Map();
+
+function rejectPasswordAuthWhenOAuthOnly(res) {
+  if (!authConfig?.oauthOnly) {
+    return false;
+  }
+
+  res.status(HTTP_STATUS.FORBIDDEN).json({
+    code: RESPONSE_CODES.FORBIDDEN,
+    message: '当前站点仅支持 Casdoor OAuth 登录'
+  });
+
+  return true;
+}
 
 // 获取邮件功能配置状态
 router.get('/email-config', (req, res) => {
@@ -111,6 +129,10 @@ router.get('/check-user-id', async (req, res) => {
 // 发送邮箱验证码
 router.post('/send-email-code', async (req, res) => {
   try {
+    if (rejectPasswordAuthWhenOAuthOnly(res)) {
+      return;
+    }
+
     // 检查邮件功能是否启用
     if (!emailConfig.enabled) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '邮件功能未启用' });
@@ -241,6 +263,10 @@ router.post('/bind-email', authenticateToken, async (req, res) => {
 // 发送找回密码验证码
 router.post('/send-reset-code', async (req, res) => {
   try {
+    if (rejectPasswordAuthWhenOAuthOnly(res)) {
+      return;
+    }
+
     // 检查邮件功能是否启用
     if (!emailConfig.enabled) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '邮件功能未启用' });
@@ -306,6 +332,10 @@ router.post('/send-reset-code', async (req, res) => {
 // 验证找回密码验证码
 router.post('/verify-reset-code', async (req, res) => {
   try {
+    if (rejectPasswordAuthWhenOAuthOnly(res)) {
+      return;
+    }
+
     // 检查邮件功能是否启用
     if (!emailConfig.enabled) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '邮件功能未启用' });
@@ -346,6 +376,10 @@ router.post('/verify-reset-code', async (req, res) => {
 // 重置密码
 router.post('/reset-password', async (req, res) => {
   try {
+    if (rejectPasswordAuthWhenOAuthOnly(res)) {
+      return;
+    }
+
     // 检查邮件功能是否启用
     if (!emailConfig.enabled) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '邮件功能未启用' });
@@ -446,6 +480,10 @@ router.delete('/unbind-email', authenticateToken, async (req, res) => {
 // 用户注册
 router.post('/register', async (req, res) => {
   try {
+    if (rejectPasswordAuthWhenOAuthOnly(res)) {
+      return;
+    }
+
     const { user_id, nickname, password, captchaId, captchaText, email, emailCode } = req.body;
 
     // 根据邮件功能是否启用，决定必填参数
@@ -595,6 +633,10 @@ router.post('/register', async (req, res) => {
 // 用户登录
 router.post('/login', async (req, res) => {
   try {
+    if (rejectPasswordAuthWhenOAuthOnly(res)) {
+      return;
+    }
+
     const { user_id, password } = req.body;
     if (!user_id || !password) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少必要参数' });
@@ -1117,6 +1159,101 @@ router.put('/admin/admins/:id/password', authenticateToken, async (req, res) => 
   } catch (error) {
     console.error('重置密码失败:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 获取 Casdoor 登录地址
+router.get('/casdoor/login', (req, res) => {
+  const signinUrl = casdoorSdk.getSigninUrl(casdoorConfig.redirectUrl);
+  res.json({
+    code: RESPONSE_CODES.SUCCESS,
+    data: { signinUrl },
+    message: 'success'
+  });
+});
+
+// Casdoor 回调处理
+router.post('/casdoor/callback', async (req, res) => {
+  try {
+    const { code, state } = req.body;
+    if (!code) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少授权码' });
+    }
+
+    // 通过授权码获取 token
+    const tokenResponse = await casdoorSdk.getOAuthToken(code, state);
+    const userToken = tokenResponse.access_token;
+
+    // 解析并验证用户信息
+    const user = casdoorSdk.parseJwtToken(userToken);
+    
+    if (!user) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({ code: RESPONSE_CODES.UNAUTHORIZED, message: '用户信息验证失败' });
+    }
+
+    // 检查用户是否已在系统中，如果没有则创建
+    // 假设 user.name 或 user.id 映射到我们的 user_id
+    const casUserId = user.name || user.id;
+    
+    let [userRows] = await pool.execute(
+      'SELECT id, user_id, nickname, avatar, is_active FROM users WHERE user_id = ?',
+      [casUserId]
+    );
+
+    let systemUser;
+    if (userRows.length === 0) {
+      // 自动注册
+      const nickname = user.displayName || user.name;
+      const avatar = user.avatar || '';
+      const email = user.email || '';
+      const location = user.location || '未知';
+      
+      const [result] = await pool.execute(
+        'INSERT INTO users (user_id, nickname, avatar, email, location, bio, password) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [casUserId, nickname, avatar, email, location, 'Casdoor 用户', ''] // OAuth 用户不设置密码
+      );
+      
+      const [newUserRows] = await pool.execute(
+        'SELECT id, user_id, nickname, avatar, is_active FROM users WHERE id = ?',
+        [result.insertId.toString()]
+      );
+      systemUser = newUserRows[0];
+    } else {
+      systemUser = userRows[0];
+    }
+
+    if (!systemUser.is_active) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({ code: RESPONSE_CODES.FORBIDDEN, message: '账户已被禁用' });
+    }
+
+    // 生成本系统的 JWT 令牌
+    const accessToken = generateAccessToken({ userId: systemUser.id, user_id: systemUser.user_id });
+    const refreshToken = generateRefreshToken({ userId: systemUser.id, user_id: systemUser.user_id });
+
+    // 保存会话
+    const userAgent = req.headers['user-agent'] || '';
+    await pool.execute('UPDATE user_sessions SET is_active = 0 WHERE user_id = ?', [systemUser.id.toString()]);
+    await pool.execute(
+      'INSERT INTO user_sessions (user_id, token, refresh_token, expires_at, user_agent, is_active) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY), ?, 1)',
+      [systemUser.id.toString(), accessToken, refreshToken, userAgent]
+    );
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '登录成功',
+      data: {
+        user: systemUser,
+        tokens: {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: 3600
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Casdoor 登录失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: 'Casdoor 授权失败' });
   }
 });
 

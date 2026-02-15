@@ -382,6 +382,39 @@ export const notificationApi = {
   }
 }
 
+// 私信相关API
+export const messageApi = {
+  // 获取会话列表
+  getConversations() {
+    return request.get('/messages/conversations')
+  },
+
+  // 创建或获取会话
+  createConversation(targetUserId) {
+    return request.post('/messages/conversations', { targetUserId })
+  },
+
+  // 获取会话消息
+  getMessages(conversationId, params = {}) {
+    return request.get(`/messages/conversations/${conversationId}/messages`, { params })
+  },
+
+  // 发送消息
+  sendMessage(conversationId, content) {
+    return request.post(`/messages/conversations/${conversationId}/messages`, { content })
+  },
+
+  // 标记会话已读
+  markConversationRead(conversationId) {
+    return request.put(`/messages/conversations/${conversationId}/read`)
+  },
+
+  // 获取私信未读数量
+  getUnreadCount() {
+    return request.get('/messages/unread-count')
+  }
+}
+
 // 搜索相关API
 export const searchApi = {
   // 统一搜索接口

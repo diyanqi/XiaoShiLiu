@@ -8,7 +8,7 @@
             <div class="logo-icon">
               <img :src="logoUrl" alt="logo">
             </div>
-            <h2 class="logo-text">小石榴管理后台</h2>
+            <h2 class="logo-text">知识星球管理后台</h2>
           </div>
         </div>
         <nav class="sidebar-nav">
@@ -278,6 +278,7 @@ const menuItems = [
   { path: '/admin/notifications', title: '通知管理', icon: 'notification' },
   { path: '/admin/sessions', title: '会话管理', icon: 'setting' },
   { path: '/admin/audit', title: '认证管理', icon: 'verified' },
+  { path: '/admin/tickets', title: '工单管理', icon: 'ticket' },
   { path: '/admin/admins', title: '管理员管理', icon: 'admin' }
 ]
 
@@ -303,6 +304,7 @@ const currentPageDescription = computed(() => {
     '/admin/notifications': '管理系统通知消息',
     '/admin/sessions': '管理用户登录会话',
     '/admin/audit': '管理用户认证申请和审核',
+    '/admin/tickets': '管理用户提交的工单和客服支持',
     '/admin/admins': '管理系统管理员账号'
   }
   return descriptions[route.path]

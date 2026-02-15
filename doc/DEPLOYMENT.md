@@ -38,11 +38,23 @@ DB_USER=xiaoshiliu_user
 DB_PASSWORD=123456
 DB_NAME=xiaoshiliu
 DB_PORT=3306
+MYSQL_USER=xiaoshiliu_user
+MYSQL_PASSWORD=123456
 
 # JWT配置
 JWT_SECRET=xiaoshiliu_secret_key_2025_docker
 JWT_EXPIRES_IN=7d
 REFRESH_TOKEN_EXPIRES_IN=30d
+AUTH_OAUTH_ONLY=true
+
+# Casdoor OAuth 配置（必填）
+CASDOOR_ENDPOINT=https://door.example.com
+CASDOOR_CLIENT_ID=your_client_id
+CASDOOR_CLIENT_SECRET=your_client_secret
+CASDOOR_CERTIFICATE=
+CASDOOR_ORG_NAME=casdoor
+CASDOOR_APP_NAME=your_app_name
+CASDOOR_REDIRECT_URL=http://localhost:8080/callback
 
 # 上传配置
 UPLOAD_MAX_SIZE=50mb
@@ -96,9 +108,9 @@ EMAIL_FROM_NAME=小石榴校园图文社区
 VITE_API_BASE_URL=http://localhost:3001/api
 
 # 服务端口配置
-FRONTEND_PORT=80
+FRONTEND_PORT=8080
 BACKEND_PORT=3001
-DB_PORT_EXTERNAL=3306
+DB_PORT_EXTERNAL=3307
 
 # 生产环境标识
 NODE_ENV=production
@@ -136,6 +148,49 @@ docker-compose up -d --build
 - **后端API**：http://localhost:3001
 - **数据库**：localhost:3307
 
+### 4.1 私信功能数据库迁移（老环境必做）
+
+> 如果是全新部署且没有复用旧数据库，可跳过本节（初始化脚本已包含私信表）。
+
+如果你在已有数据库上升级，请在 MySQL 中执行以下 SQL：
+
+```sql
+CREATE TABLE IF NOT EXISTS `private_conversations` (
+   `id` bigint(20) NOT NULL AUTO_INCREMENT,
+   `user1_id` bigint(20) NOT NULL,
+   `user2_id` bigint(20) NOT NULL,
+   `user_low_id` bigint(20) GENERATED ALWAYS AS (LEAST(`user1_id`, `user2_id`)) STORED,
+   `user_high_id` bigint(20) GENERATED ALWAYS AS (GREATEST(`user1_id`, `user2_id`)) STORED,
+   `last_message_id` bigint(20) DEFAULT NULL,
+   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   PRIMARY KEY (`id`),
+   UNIQUE KEY `uk_conversation_users` (`user_low_id`, `user_high_id`),
+   KEY `idx_user1_id` (`user1_id`),
+   KEY `idx_user2_id` (`user2_id`),
+   KEY `idx_updated_at` (`updated_at`),
+   CONSTRAINT `fk_private_conversation_user1` FOREIGN KEY (`user1_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+   CONSTRAINT `fk_private_conversation_user2` FOREIGN KEY (`user2_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `private_messages` (
+   `id` bigint(20) NOT NULL AUTO_INCREMENT,
+   `conversation_id` bigint(20) NOT NULL,
+   `sender_id` bigint(20) NOT NULL,
+   `receiver_id` bigint(20) NOT NULL,
+   `content` text NOT NULL,
+   `is_read` tinyint(1) NOT NULL DEFAULT 0,
+   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   PRIMARY KEY (`id`),
+   KEY `idx_conversation_id` (`conversation_id`),
+   KEY `idx_receiver_read` (`receiver_id`, `is_read`),
+   KEY `idx_created_at` (`created_at`),
+   CONSTRAINT `fk_private_message_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `private_conversations` (`id`) ON DELETE CASCADE,
+   CONSTRAINT `fk_private_message_sender` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+   CONSTRAINT `fk_private_message_receiver` FOREIGN KEY (`receiver_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
 ### 5. 常用管理命令
 
 ```powershell
@@ -150,6 +205,59 @@ docker-compose up -d --build
 
 # 清理所有数据（谨慎使用）
 .\deploy.ps1 -Clean
+```
+
+### 6. 推送镜像到 DockerHub
+
+```bash
+# 1) 登录 DockerHub（建议使用 Access Token）
+docker login
+
+# 2) 构建镜像
+docker compose build
+
+# 3) 打标签（替换 yourname）
+docker tag xiaoshiliu-backend:latest yourname/xiaoshiliu-backend:latest
+docker tag xiaoshiliu-frontend:latest yourname/xiaoshiliu-frontend:latest
+
+# 4) 推送
+docker push yourname/xiaoshiliu-backend:latest
+docker push yourname/xiaoshiliu-frontend:latest
+```
+
+生产环境可直接在 `docker-compose.yml` 中将 `backend`、`frontend` 的 `build` 替换为 `image: yourname/xiaoshiliu-backend:latest` 和 `image: yourname/xiaoshiliu-frontend:latest`。
+
+### 7. 前后端单镜像（Unified）
+
+项目已提供根目录 `Dockerfile.unified`，会把前端构建产物打进后端容器，由 Express 同时提供页面与 API。
+
+```bash
+# 构建单镜像
+docker build -f Dockerfile.unified -t yourname/xiaoshiliu-unified:latest .
+
+# 推送到 DockerHub
+docker push yourname/xiaoshiliu-unified:latest
+```
+
+运行时建议仍使用独立 MySQL：
+
+```bash
+docker run -d --name xiaoshiliu-unified \
+   -p 3001:3001 \
+   -e DB_HOST=your_mysql_host \
+   -e DB_USER=your_db_user \
+   -e DB_PASSWORD=your_db_password \
+   -e DB_NAME=xiaoshiliu \
+   -e DB_PORT=3306 \
+   -e JWT_SECRET=change_me \
+   -e AUTH_OAUTH_ONLY=true \
+   -e CASDOOR_ENDPOINT=https://door.example.com \
+   -e CASDOOR_CLIENT_ID=your_client_id \
+   -e CASDOOR_CLIENT_SECRET=your_client_secret \
+   -e CASDOOR_ORG_NAME=casdoor \
+   -e CASDOOR_APP_NAME=your_app_name \
+   -e CASDOOR_REDIRECT_URL=https://yourdomain.com/callback \
+   yourname/xiaoshiliu-unified:latest
 ```
 
 ## 🛠️ 传统部署
@@ -194,6 +302,16 @@ NODE_ENV=development
 JWT_SECRET=xiaoshiliu_secret_key_2025_production
 JWT_EXPIRES_IN=7d
 REFRESH_TOKEN_EXPIRES_IN=30d
+AUTH_OAUTH_ONLY=true
+
+# Casdoor OAuth 配置
+CASDOOR_ENDPOINT=https://door.example.com
+CASDOOR_CLIENT_ID=your_client_id
+CASDOOR_CLIENT_SECRET=your_client_secret
+CASDOOR_CERTIFICATE=
+CASDOOR_ORG_NAME=casdoor
+CASDOOR_APP_NAME=your_app_name
+CASDOOR_REDIRECT_URL=http://localhost:5173/callback
 
 # 数据库配置
 DB_HOST=localhost
@@ -398,6 +516,24 @@ XiaoShiLiu/
    ```env
    EMAIL_ENABLED=false
    ```
+
+### Casdoor-only 登录配置
+
+当 `AUTH_OAUTH_ONLY=true` 时，系统会禁用账号密码注册/登录/找回密码，仅允许 Casdoor OAuth 登录。
+
+请确保以下配置正确：
+
+```env
+AUTH_OAUTH_ONLY=true
+CASDOOR_ENDPOINT=https://door.example.com
+CASDOOR_CLIENT_ID=your_client_id
+CASDOOR_CLIENT_SECRET=your_client_secret
+CASDOOR_ORG_NAME=casdoor
+CASDOOR_APP_NAME=your_app_name
+CASDOOR_REDIRECT_URL=https://yourdomain.com/callback
+```
+
+并在 Casdoor 控制台把回调地址加入应用白名单，例如：`https://yourdomain.com/callback`。
 
 ### 反向代理配置
 

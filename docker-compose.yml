@@ -10,11 +10,11 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-123456}
       MYSQL_DATABASE: ${DB_NAME:-xiaoshiliu}
-      MYSQL_USER: ${DB_USER:-xiaoshiliu_user}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-123456}
+      MYSQL_USER: ${MYSQL_USER:-xiaoshiliu_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456}
       TZ: Asia/Shanghai
     ports:
-      - "3307:3306"
+      - "${DB_PORT_EXTERNAL:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./express-project/scripts/init-database.sql:/docker-entrypoint-initdb.d/init.sql
@@ -45,6 +45,14 @@ services:
       JWT_SECRET: ${JWT_SECRET:-xiaoshiliu_secret_key_2025}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-30d}
+      AUTH_OAUTH_ONLY: ${AUTH_OAUTH_ONLY:-true}
+      CASDOOR_ENDPOINT: ${CASDOOR_ENDPOINT:-}
+      CASDOOR_CLIENT_ID: ${CASDOOR_CLIENT_ID:-}
+      CASDOOR_CLIENT_SECRET: ${CASDOOR_CLIENT_SECRET:-}
+      CASDOOR_CERTIFICATE: ${CASDOOR_CERTIFICATE:-}
+      CASDOOR_ORG_NAME: ${CASDOOR_ORG_NAME:-casdoor}
+      CASDOOR_APP_NAME: ${CASDOOR_APP_NAME:-}
+      CASDOOR_REDIRECT_URL: ${CASDOOR_REDIRECT_URL:-http://localhost:8080/callback}
       API_BASE_URL: http://localhost:3001
       UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-50mb}
       UPLOAD_STRATEGY: ${UPLOAD_STRATEGY:-imagehost}
@@ -54,7 +62,7 @@ services:
       IMAGEHOST_TIMEOUT: ${IMAGEHOST_TIMEOUT:-60000}
       TZ: Asia/Shanghai
     ports:
-      - "3001:3001"
+      - "${BACKEND_PORT:-3001}:3001"
     volumes:
       - backend_uploads:/app/uploads
       - /etc/localtime:/etc/localtime:ro
@@ -82,7 +90,7 @@ services:
     environment:
       TZ: Asia/Shanghai
     ports:
-      - "8080:80"
+      - "${FRONTEND_PORT:-8080}:80"
     volumes:
       - /etc/localtime:/etc/localtime:ro
     networks:

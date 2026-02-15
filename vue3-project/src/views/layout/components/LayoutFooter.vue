@@ -4,7 +4,7 @@
             <div class="footer-list">
                 <ul>
                     <li v-for="item in footerList" :key="item.icon"
-                        :class="{ 'notification-item': item.icon === 'notification' }">
+                        :class="{ 'badge-item': item.icon === 'notification' || item.icon === 'chat' }">
 
                         <template v-if="item.label === 'explore'">
                             <a href="#" @click="handleExploreClick" class="footer-link">
@@ -21,6 +21,9 @@
                         <div v-if="item.icon === 'notification' && unreadCount > 0" class="count">{{ unreadCount > 99 ?
                             '···' : unreadCount }}
                         </div>
+                        <div v-if="item.icon === 'chat' && unreadMessageCount > 0" class="count">{{ unreadMessageCount > 99 ?
+                            '···' : unreadMessageCount }}
+                        </div>
                     </li>
                 </ul>
             </div>
@@ -34,19 +37,23 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouteUtils } from '@/composables/useRouteUtils'
 import { useUserStore } from '@/stores/user'
 import { useNotificationStore } from '@/stores/notification'
+import { useMessageStore } from '@/stores/message'
 
 const { route, handleExploreClick } = useRouteUtils()
 const userStore = useUserStore()
 const notificationStore = useNotificationStore()
+const messageStore = useMessageStore()
 
 // 从store获取未读通知数量
 const unreadCount = computed(() => notificationStore.unreadCount)
+const unreadMessageCount = computed(() => messageStore.unreadCount)
 
 // 底部导航配置
 const footerList = ref([
     { label: 'explore', icon: 'home', path: '/explore' },
     { label: 'publish', icon: 'publish', path: '/publish' },
     { label: 'notification', icon: 'notification', path: '/notification' },
+    { label: 'messages', icon: 'chat', path: '/messages' },
     { label: 'user', icon: 'user', path: '/user' },
 ])
 
@@ -54,8 +61,10 @@ const footerList = ref([
 watch(() => userStore.isLoggedIn, (newValue) => {
     if (newValue) {
         notificationStore.fetchUnreadCount()
+        messageStore.fetchUnreadCount()
     } else {
         notificationStore.clearUnreadCount()
+        messageStore.clearUnreadCount()
     }
 }, { immediate: true })
 
@@ -67,11 +76,18 @@ watch(() => route.path, (newPath, oldPath) => {
             notificationStore.fetchUnreadCount()
         }, 500)
     }
+
+    if (oldPath === '/messages' && newPath !== '/messages' && userStore.isLoggedIn) {
+        setTimeout(() => {
+            messageStore.fetchUnreadCount()
+        }, 500)
+    }
 })
 
 onMounted(() => {
     if (userStore.isLoggedIn) {
         notificationStore.fetchUnreadCount()
+        messageStore.fetchUnreadCount()
     }
 })
 </script>
@@ -170,7 +186,7 @@ onMounted(() => {
     color: var(--text-color-primary);
 }
 
-.notification-item .count {
+.badge-item .count {
     position: absolute;
     width: 18px;
     height: 18px;

@@ -19,11 +19,27 @@ const config = {
     env: process.env.NODE_ENV || 'development'
   },
 
+  // Casdoor配置
+  casdoor: {
+    endpoint: process.env.CASDOOR_ENDPOINT,
+    clientId: process.env.CASDOOR_CLIENT_ID,
+    clientSecret: process.env.CASDOOR_CLIENT_SECRET,
+    certificate: process.env.CASDOOR_CERTIFICATE, // 可选
+    orgName: process.env.CASDOOR_ORG_NAME || 'casdoor',
+    appName: process.env.CASDOOR_APP_NAME,
+    redirectUrl: process.env.CASDOOR_REDIRECT_URL || 'http://localhost:5173/callback'
+  },
+
   // JWT配置
   jwt: {
     secret: process.env.JWT_SECRET || 'xiaoshiliu_secret_key_2025',
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '30d'
+  },
+
+  // 认证模式配置
+  auth: {
+    oauthOnly: process.env.AUTH_OAUTH_ONLY !== 'false'
   },
 
   // 数据库配置

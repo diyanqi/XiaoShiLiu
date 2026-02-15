@@ -248,6 +248,111 @@ CREATE TABLE IF NOT EXISTS `audit` (
   CONSTRAINT `audit_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='审核表';
 
+-- 16. 私信会话表
+CREATE TABLE IF NOT EXISTS `private_conversations` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '会话ID',
+  `user1_id` bigint(20) NOT NULL COMMENT '会话用户1',
+  `user2_id` bigint(20) NOT NULL COMMENT '会话用户2',
+  `user_low_id` bigint(20) GENERATED ALWAYS AS (LEAST(`user1_id`, `user2_id`)) STORED,
+  `user_high_id` bigint(20) GENERATED ALWAYS AS (GREATEST(`user1_id`, `user2_id`)) STORED,
+  `last_message_id` bigint(20) DEFAULT NULL COMMENT '最后一条消息ID',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_conversation_users` (`user_low_id`, `user_high_id`),
+  KEY `idx_user1_id` (`user1_id`),
+  KEY `idx_user2_id` (`user2_id`),
+  KEY `idx_updated_at` (`updated_at`),
+  CONSTRAINT `fk_private_conversation_user1` FOREIGN KEY (`user1_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_private_conversation_user2` FOREIGN KEY (`user2_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='私信会话表';
+
+-- 17. 私信消息表
+CREATE TABLE IF NOT EXISTS `private_messages` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '消息ID',
+  `conversation_id` bigint(20) NOT NULL COMMENT '会话ID',
+  `sender_id` bigint(20) NOT NULL COMMENT '发送者ID',
+  `receiver_id` bigint(20) NOT NULL COMMENT '接收者ID',
+  `content` text NOT NULL COMMENT '消息内容',
+  `is_read` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已读',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发送时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_conversation_id` (`conversation_id`),
+  KEY `idx_receiver_read` (`receiver_id`, `is_read`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `fk_private_message_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `private_conversations` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_private_message_sender` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_private_message_receiver` FOREIGN KEY (`receiver_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='私信消息表';
+
+-- 18. 工单分类表
+CREATE TABLE IF NOT EXISTS `ticket_categories` (
+  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '分类ID',
+  `name` varchar(50) NOT NULL COMMENT '分类名称',
+  `description` varchar(255) DEFAULT NULL COMMENT '分类描述',
+  `sort_order` int(11) DEFAULT 0 COMMENT '排序顺序',
+  `is_active` tinyint(1) DEFAULT 1 COMMENT '是否启用',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_name` (`name`),
+  KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单分类表';
+
+-- 19. 工单表
+CREATE TABLE IF NOT EXISTS `tickets` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '工单ID',
+  `ticket_no` varchar(32) NOT NULL COMMENT '工单编号',
+  `user_id` bigint(20) NOT NULL COMMENT '用户ID',
+  `category_id` int(11) DEFAULT NULL COMMENT '分类ID',
+  `subject` varchar(200) NOT NULL COMMENT '工单主题',
+  `description` text NOT NULL COMMENT '问题描述',
+  `priority` enum('low', 'medium', 'high', 'urgent') DEFAULT 'medium' COMMENT '优先级',
+  `status` enum('open', 'pending', 'in_progress', 'resolved', 'closed') DEFAULT 'open' COMMENT '工单状态',
+  `assigned_to` bigint(20) DEFAULT NULL COMMENT '分配给管理员ID',
+  `resolved_at` timestamp NULL DEFAULT NULL COMMENT '解决时间',
+  `closed_at` timestamp NULL DEFAULT NULL COMMENT '关闭时间',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ticket_no` (`ticket_no`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_category_id` (`category_id`),
+  KEY `idx_assigned_to` (`assigned_to`),
+  KEY `idx_status` (`status`),
+  KEY `idx_priority` (`priority`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `fk_ticket_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_ticket_category` FOREIGN KEY (`category_id`) REFERENCES `ticket_categories` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_ticket_admin` FOREIGN KEY (`assigned_to`) REFERENCES `admin` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单表';
+
+-- 20. 工单消息表
+CREATE TABLE IF NOT EXISTS `ticket_messages` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '消息ID',
+  `ticket_id` bigint(20) NOT NULL COMMENT '工单ID',
+  `sender_type` enum('user', 'admin') NOT NULL COMMENT '发送者类型',
+  `sender_id` bigint(20) NOT NULL COMMENT '发送者ID',
+  `content` text NOT NULL COMMENT '消息内容',
+  `attachments` json DEFAULT NULL COMMENT '附件（JSON数组）',
+  `is_internal` tinyint(1) DEFAULT 0 COMMENT '是否内部备注（仅管理员可见）',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_ticket_id` (`ticket_id`),
+  KEY `idx_sender` (`sender_type`, `sender_id`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `fk_ticket_message_ticket` FOREIGN KEY (`ticket_id`) REFERENCES `tickets` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工单消息表';
+
+-- 插入默认工单分类
+INSERT INTO `ticket_categories` (`name`, `description`, `sort_order`) VALUES 
+('账号问题', '账号登录、注册、密码等相关问题', 1),
+('内容问题', '笔记发布、编辑、删除等相关问题', 2),
+('功能建议', '产品功能改进和新功能建议', 3),
+('举报投诉', '违规内容举报、用户投诉等', 4),
+('其他问题', '其他类型的问题和咨询', 5)
+ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
+
 -- 插入默认管理员账户
 -- 密码: 123456
 INSERT INTO `admin` (`username`, `password`) VALUES 

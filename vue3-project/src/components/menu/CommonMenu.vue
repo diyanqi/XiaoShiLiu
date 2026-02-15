@@ -14,9 +14,23 @@ const aboutStore = useAboutStore()
 const keyboardShortcutsStore = useKeyboardShortcutsStore()
 const accountSecurityStore = useAccountSecurityStore()
 
-// 登录处理
-const handleLoginClick = () => {
-  authStore.openLoginModal()
+// 登录处理 - 直接跳转到Casdoor登录
+const handleLoginClick = async () => {
+  try {
+    const response = await fetch('/api/auth/casdoor/login')
+    const result = await response.json()
+    if (result.code === 200 && result.data.signinUrl) {
+      window.location.href = result.data.signinUrl
+    } else {
+      console.error('获取登录地址失败:', result.message)
+      // 如果Casdoor不可用，回退到使用弹窗
+      authStore.openLoginModal()
+    }
+  } catch (error) {
+    console.error('Casdoor 登录失败:', error)
+    // 网络错误时回退到使用弹窗
+    authStore.openLoginModal()
+  }
 }
 
 // 退出登录处理
@@ -49,7 +63,7 @@ const handleMenuClick = (action) => {
 <template>
 
   <DropdownItem @click="handleMenuClick('about')">
-    关于小石榴
+    关于知识星球
   </DropdownItem>
   <DropdownItem @click="handleMenuClick('keyboardShortcuts')">
     键盘快捷键

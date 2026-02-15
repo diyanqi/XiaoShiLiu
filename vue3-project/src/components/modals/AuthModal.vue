@@ -8,16 +8,16 @@
 
       <div class="auth-content">
         <div class="auth-header">
-          <h2 class="auth-title">{{ isLoginMode ? '登录小石榴' : '注册小石榴' }}</h2>
-          <p class="auth-subtitle">{{ isLoginMode ? '欢迎回来！' : '加入我们，开始分享美好生活' }}</p>
+          <h2 class="auth-title">登录知识星球</h2>
+          <p class="auth-subtitle">当前仅支持 Casdoor OAuth 登录</p>
         </div>
 
-        <form @submit.prevent="handleSubmit" class="auth-form" novalidate autocomplete="off">
+        <form v-if="localAuthEnabled" @submit.prevent="handleSubmit" class="auth-form" novalidate autocomplete="off">
           <div class="form-group">
-            <label for="user_id" class="form-label">小石榴号</label>
+            <label for="user_id" class="form-label">知识星球号</label>
             <input type="text" id="user_id" v-model="formData.user_id" class="form-input"
               :class="{ 'error': showErrors && errors.user_id }"
-              :placeholder="isLoginMode ? '请输入小石榴号' : '请输入小石榴号（3-15位字母数字下划线）'" maxlength="15"
+              :placeholder="isLoginMode ? '请输入知识星球号' : '请输入知识星球号（3-15位字母数字下划线）'" maxlength="15"
               autocomplete="off" @input="clearError('user_id')" />
             <span v-if="showErrors && errors.user_id" class="error-message">{{ errors.user_id }}</span>
           </div>
@@ -84,7 +84,17 @@
           </button>
         </form>
 
-        <div class="auth-switch">
+        <div class="social-login">
+          <div class="divider">
+            <span>使用统一认证</span>
+          </div>
+          <button type="button" class="casdoor-btn" @click="handleCasdoorLogin">
+            <img src="https://casdoor.org/img/casdoor.png" alt="Casdoor" class="social-icon" />
+            使用 Casdoor 登录
+          </button>
+        </div>
+
+        <div v-if="localAuthEnabled" class="auth-switch">
           <span class="switch-text">
             {{ isLoginMode ? '还没有账号？' : '已有账号？' }}
           </span>
@@ -93,7 +103,7 @@
           </button>
         </div>
 
-        <div v-if="isLoginMode && emailEnabled" class="forgot-password">
+        <div v-if="localAuthEnabled && isLoginMode && emailEnabled" class="forgot-password">
           <button type="button" class="forgot-btn" @click="openResetPassword">
             忘记密码？
           </button>
@@ -137,6 +147,7 @@ const emailEnabled = ref(false)
 
 const isAnimating = ref(false)
 const isLoginMode = ref(props.initialMode === 'login')
+const localAuthEnabled = ref(false)
 const isSubmitting = ref(false)
 const submitError = ref('')
 const unifiedMessage = ref('')
@@ -193,17 +204,17 @@ const validateUserId = async () => {
   errors.user_id = ''
 
   if (!formData.user_id.trim()) {
-    errors.user_id = '请输入小石榴号'
+    errors.user_id = '请输入知识星球号'
     return
   }
 
   if (formData.user_id.length < 3 || formData.user_id.length > 15) {
-    errors.user_id = '小石榴号长度必须在3-15位之间'
+    errors.user_id = '知识星球号长度必须在3-15位之间'
     return
   }
 
   if (!/^[a-zA-Z0-9_]+$/.test(formData.user_id)) {
-    errors.user_id = '小石榴号只能包含字母、数字和下划线'
+    errors.user_id = '知识星球号只能包含字母、数字和下划线'
     return
   }
 
@@ -215,7 +226,7 @@ const validateUserId = async () => {
 
       if (result.code === 200) {
         if (!result.data.isUnique) {
-          errors.user_id = '小石榴号已存在'
+          errors.user_id = '知识星球号已存在'
           return
         }
       } else {
@@ -429,7 +440,7 @@ const handleSubmit = async () => {
     }
 
     if (isUserIdEmpty) {
-      unifiedMessage.value = '请输入小石榴号'
+      unifiedMessage.value = '请输入知识星球号'
       return
     }
 
@@ -556,6 +567,22 @@ const openResetPassword = () => {
   setTimeout(() => {
     emit('open-reset-password')
   }, 200)
+}
+
+// 处理 Casdoor 登录
+const handleCasdoorLogin = async () => {
+  try {
+    const response = await fetch('/api/auth/casdoor/login')
+    const result = await response.json()
+    if (result.code === 200 && result.data.signinUrl) {
+      window.location.href = result.data.signinUrl
+    } else {
+      unifiedMessage.value = result.message || '获取登录地址失败'
+    }
+  } catch (error) {
+    console.error('Casdoor 登录失败:', error)
+    unifiedMessage.value = '网络错误，请稍后重试'
+  }
 }
 
 // 获取邮件功能配置
@@ -818,6 +845,56 @@ onMounted(() => {
 
 .forgot-btn:hover {
   color: var(--primary-color);
+}
+
+.social-login {
+  margin-top: 24px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  color: var(--text-color-secondary);
+  font-size: 14px;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--bg-color-secondary);
+}
+
+.divider span {
+  padding: 0 12px;
+}
+
+.casdoor-btn {
+  width: 100%;
+  padding: 12px;
+  background: white;
+  border: 1px solid #e1e4e8;
+  border-radius: 999px;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.casdoor-btn:hover {
+  background-color: #f6f8fa;
+}
+
+.social-icon {
+  width: 20px;
+  height: 20px;
 }
 
 /* 邮箱验证码输入框和按钮样式 */
