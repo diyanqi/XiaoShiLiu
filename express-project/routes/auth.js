@@ -1164,7 +1164,7 @@ router.put('/admin/admins/:id/password', authenticateToken, async (req, res) => 
 
 // 获取 Casdoor 登录地址
 router.get('/casdoor/login', (req, res) => {
-  const signinUrl = casdoorSdk.getSigninUrl(casdoorConfig.redirectUrl);
+  const signinUrl = casdoorSdk.getSignInUrl(casdoorConfig.redirectUrl);
   res.json({
     code: RESPONSE_CODES.SUCCESS,
     data: { signinUrl },
@@ -1181,7 +1181,7 @@ router.post('/casdoor/callback', async (req, res) => {
     }
 
     // 通过授权码获取 token
-    const tokenResponse = await casdoorSdk.getOAuthToken(code, state);
+    const tokenResponse = await casdoorSdk.getAuthToken(code);
     const userToken = tokenResponse.access_token;
 
     // 解析并验证用户信息
